@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f0f0f" />
+  <title>Circle Draw</title>
+  <link rel="manifest" href="manifest.json" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --border: rgba(255,255,255,0.08);
+      --accent: #c8ff00;
+      --accent-dim: rgba(200,255,0,0.15);
+      --text: #f0f0f0;
+      --muted: #666;
+      --good: #00e5a0;
+      --bad: #ff4d4d;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px);
+      gap: 16px;
+    }
+
+    header {
+      width: 100%;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-top: 8px;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    header span {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #canvas-wrap {
+      flex: 1;
+      width: 100%;
+      max-width: 420px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      cursor: crosshair;
+      touch-action: none;
+      display: block;
+    }
+
+    #hint {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: 0.03em;
+      min-height: 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 10px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat-val.highlight { color: var(--accent); }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    #result-msg {
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      min-height: 26px;
+      letter-spacing: -0.3px;
+    }
+
+    #result-sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      min-height: 18px;
+    }
+
+    #try-btn {
+      width: 100%;
+      max-width: 420px;
+      padding: 16px;
+      background: var(--accent);
+      color: #0f0f0f;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    #try-btn:active { transform: scale(0.98); opacity: 0.85; }
+
+    @keyframes pop {
+      0% { transform: scale(0.95); opacity: 0; }
+      60% { transform: scale(1.03); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .pop { animation: pop 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Circle Draw</h1>
+    <span id="tries-label">0 tries</span>
+  </header>
+
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <p id="hint">Draw a circle with your finger</p>
+  <p id="result-msg"></p>
+  <p id="result-sub"></p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="score-val">—</div>
+      <div class="stat-lbl">Accuracy</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="best-val">—</div>
+      <div class="stat-lbl">Best</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="avg-val">—</div>
+      <div class="stat-lbl">Average</div>
+    </div>
+  </div>
+
+  <button id="try-btn" onclick="resetDraw()">Try Again</button>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('canvas-wrap');
+
+  function resizeCanvas() {
+    const size = Math.min(wrap.clientWidth, wrap.clientHeight);
+    canvas.width = size;
+    canvas.height = size;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const scoreEl = document.getElementById('score-val');
+  const bestEl = document.getElementById('best-val');
+  const avgEl = document.getElementById('avg-val');
+  const msgEl = document.getElementById('result-msg');
+  const subEl = document.getElementById('result-sub');
+  const hintEl = document.getElementById('hint');
+  const triesLabel = document.getElementById('tries-label');
+
+  let points = [], drawing = false;
+  let bestScore = null, scores = [], tries = 0;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - r.left) * (canvas.width / r.width),
+      y: (src.clientY - r.top) * (canvas.height / r.height)
+    };
+  }
+
+  function drawStroke(color) {
+    if (points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  function analyzeCircle(pts) {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    const radii = pts.map(p => Math.hypot(p.x - cx, p.y - cy));
+    const avgR = radii.reduce((a, b) => a + b, 0) / radii.length;
+    const maxDev = Math.max(...radii.map(r => Math.abs(r - avgR)));
+    const roundness = Math.max(0, 1 - (maxDev / avgR));
+    const angles = pts.map(p => Math.atan2(p.y - cy, p.x - cx));
+    let sorted = [...angles].sort((a, b) => a - b);
+    let maxGap = 0;
+    for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i] - sorted[i-1]);
+    const endGap = sorted[0] + 2 * Math.PI - sorted[sorted.length - 1];
+    maxGap = Math.max(maxGap, endGap);
+    const completeness = Math.max(0, 1 - maxGap / (Math.PI * 0.5));
+    const score = Math.round(roundness * 0.7 * 100 + completeness * 0.3 * 100);
+    return { score, cx, cy, avgR };
+  }
+
+  function showResult({ score, cx, cy, avgR }) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+    ctx.arc(cx, cy, avgR, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(200,255,0,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const color = score >= 70 ? '#00e5a0' : score >= 45 ? '#c8ff00' : '#ff4d4d';
+    drawStroke(color);
+
+    tries++;
+    scores.push(score);
+    triesLabel.textContent = tries + (tries === 1 ? ' try' : ' tries');
+
+    scoreEl.textContent = score + '%';
+    scoreEl.className = 'stat-val highlight';
+
+    if (bestScore === null || score > bestScore) {
+      bestScore = score;
+      bestEl.textContent = score + '%';
+    }
+
+    const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    avgEl.textContent = avg + '%';
+
+    let msg = '', sub = '';
+    if (score >= 97) { msg = 'Legendary!'; sub = 'Are you even human?'; }
+    else if (score >= 90) { msg = 'Perfect!'; sub = 'You might be a compass'; }
+    else if (score >= 80) { msg = 'Excellent!'; sub = 'Nearly flawless'; }
+    else if (score >= 70) { msg = 'Great job!'; sub = 'Very solid circle'; }
+    else if (score >= 55) { msg = 'Pretty good!'; sub = 'Keep practicing'; }
+    else if (score >= 40) { msg = 'Not bad!'; sub = 'More of an oval...'; }
+    else { msg = 'Keep trying!'; sub = 'Was that a potato?'; }
+
+    msgEl.textContent = msg;
+    msgEl.className = 'pop';
+    subEl.textContent = sub;
+    hintEl.textContent = 'Tap "Try Again" to draw another';
+  }
+
+  function resetDraw() {
+    points = [];
+    drawing = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    scoreEl.textContent = '—';
+    scoreEl.className = 'stat-val';
+    msgEl.textContent = '';
+    subEl.textContent = '';
+    hintEl.textContent = 'Draw a circle with your finger';
+  }
+
+  canvas.addEventListener('mousedown', e => { drawing = true; points = [getPos(e)]; });
+  canvas.addEventListener('mousemove', e => { if (!drawing) return; points.push(getPos(e)); ctx.clearRect(0,0,canvas.width,canvas.height); drawStroke('rgba(200,255,0,0.7)'); });
+  canvas.addEventListener('mouseup', () => { if (!drawing || points.length < 20) return; drawing = false; showResult(analyzeCircle(points)); });
+
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; points = [getPos(e)]; }, { passive: false });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; points.push(getPos(e)); ctx.clearRect(0,0,canvas.width,canvas.height); drawStroke('rgba(200,255,0,0.7)'); }, { passive: false });
+  canvas.addEventListener('touchend', e => { e.preventDefault(); if (!drawing || points.length < 20) return; drawing = false; showResult(analyzeCircle(points)); }, { passive: false });
+</script>
+</body>
+</html>
